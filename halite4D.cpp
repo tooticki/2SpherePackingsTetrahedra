@@ -10,7 +10,7 @@ using namespace interval_lib;
 
 // Threads for parallel programming
 #include <thread>         // std::thread
-
+int threads_finished = 0;
 
 
 #include <array>
@@ -178,8 +178,12 @@ bool keep(block B)
 std::pair<block,block> split(block B)
 {
     int i=0;
-    for(int j=1;j<6;j++)
-        if (width(B[j])>width(B[i])) i=j;
+    for(int j=1;j<6;j++){
+	//ifi the sphere support has radius r, ac is derived from other edges so ignore it
+#if defined(support_sphere_r)
+	if (j==1) continue;
+#endif
+        if (width(B[j])>width(B[i])) i=j;}
     std::pair<I,I> e=bisect(B[i]);
     block C=B;
     B[i]=e.first;
@@ -271,6 +275,8 @@ void bound_density_in_block(block B){
 
     printf("Block with the highest lower bound on the density (%.20f):\n",delta_max);
     print_block(densest_block);
+    threads_finished+=1;
+    printf("%i threads terminated", threads_finished);
 }
 
 
@@ -341,7 +347,7 @@ int main(int argc, char *argv[])
 
     for (auto& th : threads) {
         th.join();
-	}
+    }
     
 
     return 0;
