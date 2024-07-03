@@ -63,6 +63,7 @@ C=P.subs(R=0).expand()
 
 # R is the root (-B-sign(C)*sqrt(D))/(2A)
 
+var('r')
 
 # formula for the length of ac when the support sphere is assumed to have radius r
 P=PolynomialRing(QQ[ab,ad,bc,bd,cd,ra,rb,rc,rd,r],ac)(A*r^2+B*r+C)

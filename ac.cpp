@@ -20,7 +20,8 @@ I ac(block B)
     // possible length for ac
     I H=hull(ra+rc,ra+rc+I(2)*r);
     // no chance for Dx^2+Ex+F to have a root in H -> return empty
-    if (!zero_in(D*pow(H,4)+E*pow(H,2)+F)) {printf("no way\n");return I(2,1);}
+    if (!zero_in(D*pow(H,4)+E*pow(H,2)+F)) {//printf("no way\n");
+	return I(2,1);}
     // negative discriminant: no such FM-tetrahedron
     I disc2=square(E)-I(4)*D*F;
     if (upper(disc2)<0) {printf("discri<0\n");return I(2,1);}
@@ -32,11 +33,13 @@ I ac(block B)
     I ac2=intersect(sqrt((-E-sqrt(disc2))/I(2)/D),H);
     if(empty(ac1)&&!empty(ac2)) {
     I ac3=sqrt((-E-sqrt(disc2))/I(2)/D);
-    printf("D=%f,%f\n",lower(D),upper(D));
-    printf("ac2=%f,%f\n",lower(ac3),upper(ac3));
+    //printf("D=%f,%f\n",lower(D),upper(D));
+    //printf("ac2=%f,%f\n",lower(ac3),upper(ac3));
     return ac2;}
-    else if(empty(ac2)&&!empty(ac1)) {printf("ac1\n"); return ac1;}
-    else if(empty(ac1)&&empty(ac2)) {printf("neither ac1 nor ac2\n"); return I(2,1);} // no such FM-tetrahedron
+    else if(empty(ac2)&&!empty(ac1)) {//printf("ac1\n");
+	return ac1;}
+    else if(empty(ac1)&&empty(ac2)) {//printf("neither ac1 nor ac2\n");
+	return I(2,1);} // no such FM-tetrahedron
     else
     {
 //        printf("ac1=%f,%f, ac2=%f,%f\n",lower(ac1),upper(ac1),lower(ac2),upper(ac2));

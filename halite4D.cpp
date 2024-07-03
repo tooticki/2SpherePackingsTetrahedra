@@ -8,6 +8,10 @@
 using namespace boost::numeric;
 using namespace interval_lib;
 
+// Threads for parallel programming
+#include <thread>         // std::thread
+
+
 
 #include <array>
 #include <iostream>
@@ -188,39 +192,10 @@ std::pair<block,block> split(block B)
 /*************************************************************/
 /*************************************************************/
 
-
-int main(int argc, char *argv[])
-{
-    printf("Tetrahedron ");
-    if (ra==u) printf("1"); else printf("r");
-    if (rb==u) printf("1"); else printf("r");
-    if (rc==u) printf("1"); else printf("r");
-    if (rd==u) printf("1"); else printf("r");
-    printf("\n");
-
-    I gap=I(2)*hull(I(0),r);
-
-
-    // initial block
-    block B;
-    B[0]=ra+rb; // always contact by homothety
-    B[1]=ra+rc+gap;
-    B[2]=ra+rd+gap;
-    B[3]=rb+rc+gap;
-    B[4]=rb+rd+gap;
-    B[5]=rc+rd+gap;
-    // dimension reduction by sliding
-    #if defined(contact_ac) // a second contact along ac
-    B[1]=ra+rc;
-    #elif defined(contact_cd) // or along cd
-    B[5]=rc+rd;
-    #elif defined(support_sphere_r) // or only one contact but a support sphere of radius r
-    // ac va devoir être recalculée en fonction des autres longueurs d'arêtes
-    #endif
-
-    printf("Initial block: ");
+void bound_density_in_block(block B){
+    printf("thread id:%i\n", std::this_thread::get_id());
+    printf(" Bound density in block: ");
     print_block(B);
-
     // blocks stores all the active blocks (only one at the beginning)
     block* blocks=new block[1];
     blocks[0]=B;
@@ -232,7 +207,7 @@ int main(int argc, char *argv[])
     while (actifs>0) // split blocks step by step while there are still some
     {
         int newdel=0;
-        if (actifs>=0) printf("step %2d: %9d blocks considered",step,2*actifs); fflush(stdout);
+        if (actifs>=0) printf(" step %2d: %9d blocks considered",step,2*actifs); fflush(stdout);
         // to store the active blocks created by halving during this step
         block* newblocks=new(std::nothrow) block[2*actifs]; // each block will give at most two new blocks
         newactifs=0;
@@ -240,7 +215,7 @@ int main(int argc, char *argv[])
 
         for(int i=0;i<actifs;i++)
         {
-            if (actifs>=10 && i*10/actifs==timer) {timer++;std::cout << "." << std::flush;}
+	    // if (actifs>=10 && i*10/actifs==timer) {timer++;std::cout << "." << std::flush;}
 
             // BB is the pair of blocks obtained by halving blocks[i]
             auto BB=split(blocks[i]);
@@ -296,6 +271,78 @@ int main(int argc, char *argv[])
 
     printf("Block with the highest lower bound on the density (%.20f):\n",delta_max);
     print_block(densest_block);
+}
+
+
+int main(int argc, char *argv[])
+{
+    using namespace std;
+    printf("Tetrahedron ");
+    if (ra==u) printf("1"); else printf("r");
+    if (rb==u) printf("1"); else printf("r");
+    if (rc==u) printf("1"); else printf("r");
+    if (rd==u) printf("1"); else printf("r");
+    printf("\n");
+
+    I gap=I(2)*hull(I(0),r);
+
+
+    // initial block
+    block B;
+    B[0]=ra+rb; // always contact by homothety
+    B[1]=ra+rc+gap;
+    B[2]=ra+rd+gap;
+    B[3]=rb+rc+gap;
+    B[4]=rb+rd+gap;
+    B[5]=rc+rd+gap;
+    // dimension reduction by sliding
+    #if defined(contact_ac) // a second contact along ac
+    B[1]=ra+rc;
+    #elif defined(contact_cd) // or along cd
+    B[5]=rc+rd;
+    #elif defined(support_sphere_r) // or only one contact but a support sphere of radius r
+    // ac va devoir être recalculée en fonction des autres longueurs d'arêtes
+    #endif
+
+    printf("Initial block: ");
+    print_block(B);
+
+
+    int sn = 6;
+    int thread_number = pow(2,sn);
+    // Subdivide the initial block into 2^sn
+    block* initial_blocks=new(std::nothrow) block[thread_number]; // each block will give at most two new blocks	    
+    initial_blocks[0] = B;
+    block* new_blocks=new(std::nothrow) block[thread_number]; // each block will give at most two new blocks	    
+    vector<thread> threads(thread_number);
+    
+    // generate 2^sn sub blocks by halving 4 times
+    for (int i = 0; i<sn; i++){
+	printf("%i",i);
+	//new_blocks = {};
+	for(int j = 0; j<pow(2,i); j++){
+	    printf(" %i",j);
+	    auto bb = split(initial_blocks[j]);
+	    new_blocks[2*j] = bb.first;
+	    new_blocks[2*j+1] = bb.second;	    
+	}
+	for(int j = 0; j<pow(2,i+1); j++){
+	    printf(" %i",j);
+	    initial_blocks[j] = new_blocks[j];
+	}
+    }
+
+    // spawn 16 threads on 16 blocks:
+    for (int i = 0; i < thread_number; i++) {
+	print_block(initial_blocks[i]);
+        threads[i] = thread(bound_density_in_block, initial_blocks[i]);
+	printf("%i",i);
+    }
+
+    for (auto& th : threads) {
+        th.join();
+	}
+    
 
     return 0;
 }
