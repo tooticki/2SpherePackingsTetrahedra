@@ -13,14 +13,14 @@ using namespace interval_lib;
 
 // Threads for parallel programming
 #include <thread>         // std::thread
-#include <semaphore>         // std::counting_semaphore
-#include <future>  // async
-int threads_finished = 0;
+#include <functional>
+#include <iostream>
+#include <boost/asio/post.hpp>
+#include <boost/bind.hpp>
+#include <boost/asio/thread_pool.hpp>
 
 
 #include <array>
-#include <iostream>
-
 
 // Fix rounding policies for the transcendental functions
 typedef interval<double, policies<save_state<rounded_transc_std<double>>, checking_base<double>>> I;
@@ -72,7 +72,7 @@ void print_block(block B)
 // other routines for tetrahedra (volume, angles, density etc)
 #include "routines.cpp"
 // task pool for parallel execution
-#include "task_pool.cpp"
+//#include "task_pool.cpp"
 
 
 // lower bound on the conjectured maximal density
@@ -102,7 +102,7 @@ float delta_max=0;
 bool keep(block B)
 {
     #if defined(support_sphere_r)
-    B[1]=ac(B);
+    B[1]=ac(B, false);
     if (empty(B[1])) return false; // not such FM-tetrahedra
     #endif
 
@@ -297,6 +297,8 @@ int bound_density_in_block(int i){
 int main(int argc, char *argv[])
 {
     using namespace std;
+    using namespace boost;
+    using namespace asio;
     printf("Tetrahedron ");
     if (ra==u) printf("1"); else printf("r");
     if (rb==u) printf("1"); else printf("r");
@@ -329,10 +331,11 @@ int main(int argc, char *argv[])
     
     // Parallelization: we subdivide the initial block into N^4 small blocks (each free edge is divided by N),
     //  we create M threads, and we give the blocks to threads so that each thread is occupied at each moment
-    int N = 20;
-    int blocks_number = pow(N,4);
-#if defined(contact_ac) || defined(contact_cd) // only 3 free variables
-    blocks_number = pow(N,3)
+    int N = 60;
+#if defined(contact_ac) || defined(contact_cd) || defined(support_sphere_r) // only 3 free variables
+    const int blocks_number = pow(N,4);
+#else
+    const int blocks_number = pow(N,5);
 #endif
     //int threads_number = 20;
     initial_blocks=new(std::nothrow) block[blocks_number];
@@ -342,33 +345,35 @@ int main(int argc, char *argv[])
     float e2_l = lower(B[2]),  e2_r = upper(B[2]);
     float e3_l = lower(B[3]),  e3_r = upper(B[3]);
     float e4_l = lower(B[4]),  e4_r = upper(B[4]);
-    float e5_l = lower(B[5]),  e4_r = upper(B[5]);
-    I e0 = B[0];
+    float e5_l = lower(B[5]),  e5_r = upper(B[5]);
+    I e0 = B[0], e1, e2, e3, e4,e5;
     int block_index = 0;
-    for (int i1=0; i1<N; i1++){
-#if defined(contact_ac) || defined(contact_support_r)
-	I e1 = hull(e5_l + (e5_r-e5_l)*i1/N, e5_l+(e5_r-e5_l)*(i1+1)/N);
+    printf("Dividing initial block into %i blocks.", blocks_number);
+    
+    for (int i1=0; i1<N; i1++){	
+#if defined(contact_ac) || defined(support_sphere_r)
+	e1 = hull(e5_l + (e5_r-e5_l)*i1/N, e5_l+(e5_r-e5_l)*(i1+1)/N);
 #else
-	I e1 = hull(e1_l + (e1_r-e1_l)*i1/N, e1_l+(e1_r-e1_l)*(i1+1)/N);
+	e1 = hull(e1_l + (e1_r-e1_l)*i1/N, e1_l+(e1_r-e1_l)*(i1+1)/N);
 #endif
 	for (int i2=0; i2<N; i2++){
-	    I e2 = hull(e2_l + (e2_r-e2_l)*i2/N, e2_l+(e2_r-e2_l)*(i2+1)/N);
+	    e2 = hull(e2_l + (e2_r-e2_l)*i2/N, e2_l+(e2_r-e2_l)*(i2+1)/N);
 	    for (int i3=0; i3<N; i3++){
-		I e3 = hull(e3_l + (e3_r-e3_l)*i3/N, e3_l+(e3_r-e3_l)*(i3+1)/N);
+		 e3 = hull(e3_l + (e3_r-e3_l)*i3/N, e3_l+(e3_r-e3_l)*(i3+1)/N);
 		for (int i4=0; i4<N; i4++){
-		    I e4 = hull(e4_l + (e4_r-e4_l)*i4/N, e4_l+(e4_r-e4_l)*(i4+1)/N);
+		    e4 = hull(e4_l + (e4_r-e4_l)*i4/N, e4_l+(e4_r-e4_l)*(i4+1)/N);
 #if defined(contact_cd)
 		    initial_blocks[block_index] = {e0, e1, e2, e3, e4, B[5]};
 		    block_index++;
-#elif defined(contact_ac) || defined(contact_support_r)		    
+#elif defined(contact_ac) || defined(support_sphere_r)		    
 		    initial_blocks[block_index] = {e0, B[1], e2, e3, e4, e1};
 		    block_index++;
 #else
 		    for (int i5=0; i5<N; i5++){
-			I e5 = hull(e5_l + (e5_r-e5_l)*i5/N, e5_l+(e5_r-e5_l)*(i5+1)/N);
+			e5 = hull(e5_l + (e5_r-e5_l)*i5/N, e5_l+(e5_r-e5_l)*(i5+1)/N);
 			initial_blocks[block_index] = {e0, e1, e2, e3, e4, e5};
 			block_index++;
-		    }
+			}
 #endif
 		}			    
 	    }
@@ -376,7 +381,17 @@ int main(int argc, char *argv[])
     }
 
     printf("Initial block is split into %i blocks.", blocks_number);
-    run_tasks([](int i) { return bound_density_in_block(i); }, 20, blocks_number);
+    // async leaks memory: so can not divide more than by 10 each edge.... 
+    // run_tasks([](int i) { return bound_density_in_block(i); }, 20, blocks_number);
+    
+    // another solution: boost thread pool
+    boost::asio::thread_pool th_pool(20);
+    
+    for (size_t i = 0; i < blocks_number; i++) {
+	post(th_pool, boost::bind(bound_density_in_block,  i));
+    }
+    th_pool.join();
+ 
     
     return 0;
 }

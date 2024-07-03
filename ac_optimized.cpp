@@ -25,10 +25,12 @@ I ac(block B,bool verbose)
     // possible length for ac
     I H=hull(ra+rc,ra+rc+I(2)*r);
     // no chance for Dx^2+Ex+F to have a root in H -> return empty
-    if (!zero_in(D*pow(H,4)+E*pow(H,2)+F)) {printf("no way\n");return I(2,1);}
+    if (!zero_in(D*pow(H,4)+E*pow(H,2)+F)) {//printf("no way\n");
+	return I(2,1);}
     // negative discriminant: no such FM-tetrahedron
     I disc2=square(E)-I(4)*D*F;
-    if (upper(disc2)<0) {printf("discri<0\n");return I(2,1);}
+    if (upper(disc2)<0) {//printf("discri<0\n");
+	return I(2,1);}
     disc2=intersect(disc2,hull(I(0),I(INFINITY)));
 
 //    if (zero_in(D)) printf("bla\n");
