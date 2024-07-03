@@ -3,6 +3,9 @@
 // sliding -> one can assume either a second pair of spheres in contact, say ac or cd (two cases to consider), or a sphere support of radius r
 // we thus have four degree of freedom
 
+// !!! use c++ 20 compuler: g++ -std=c++20 halite4D.cpp -o halite4D.o 
+
+
 // Library for interval arithmetic
 #include <boost/numeric/interval.hpp>
 using namespace boost::numeric;
@@ -10,6 +13,8 @@ using namespace interval_lib;
 
 // Threads for parallel programming
 #include <thread>         // std::thread
+#include <semaphore>         // std::counting_semaphore
+#include <future>  // async
 int threads_finished = 0;
 
 
@@ -35,7 +40,7 @@ I rb=u;
 I rc=u;
 I rd=u;
 
-
+block* initial_blocks;
 
 /******************/
 /* case selection */
@@ -62,10 +67,13 @@ void print_block(block B)
 
 // radius of the sphere support of a tetrahedron
 #include "radius_general.cpp"
-// length of ac as a function of the other edge length and a radius r
-#include "ac.cpp"
+// length of ac as a function of the other edge length and a radius r optimized for radii
+#include "ac_optimized.cpp"
 // other routines for tetrahedra (volume, angles, density etc)
 #include "routines.cpp"
+// task pool for parallel execution
+#include "task_pool.cpp"
+
 
 // lower bound on the conjectured maximal density
 #if defined (uuuu)
@@ -196,10 +204,11 @@ std::pair<block,block> split(block B)
 /*************************************************************/
 /*************************************************************/
 
-void bound_density_in_block(block B){
-    printf("thread id:%i\n", std::this_thread::get_id());
-    printf(" Bound density in block: ");
-    print_block(B);
+int bound_density_in_block(int i){
+    block B = initial_blocks[i];
+    printf("block id:%i\n", i);
+    //printf(" Bound density in block: ");
+    //print_block(B);
     // blocks stores all the active blocks (only one at the beginning)
     block* blocks=new block[1];
     blocks[0]=B;
@@ -209,13 +218,18 @@ void bound_density_in_block(block B){
     int step=0;
 
     while (actifs>0) // split blocks step by step while there are still some
-    {
-        int newdel=0;
-        if (actifs>=0) printf(" step %2d: %9d blocks considered",step,2*actifs); fflush(stdout);
-        // to store the active blocks created by halving during this step
-        block* newblocks=new(std::nothrow) block[2*actifs]; // each block will give at most two new blocks
-        newactifs=0;
-        int timer=1 ;
+	{
+	    if (del>1000000){
+		printf("1000000 del, some block: ");
+		print_block(blocks[0]);
+		break;
+	    }
+	    int newdel=0;
+	    //if (actifs>=0) printf(" step %2d: %9d blocks considered",step,2*actifs); fflush(stdout);
+	    // to store the active blocks created by halving during this step
+	    block* newblocks=new(std::nothrow) block[2*actifs]; // each block will give at most two new blocks
+	    newactifs=0;
+	    int timer=1 ;
 
         for(int i=0;i<actifs;i++)
         {
@@ -229,7 +243,7 @@ void bound_density_in_block(block B){
             if (keep(BB.second)) {newblocks[newactifs]=BB.second; newactifs++;} else {newdel++;}
         }
         del+=newdel;
-        if (actifs>=0) printf("|%9d| blocks deleted (%2d\%)\n",newdel,100*newdel/2/actifs);
+        //if (actifs>=0) printf("|%9d| blocks deleted (%2d\%)\n",newdel,100*newdel/2/actifs);
 
         // newblocks will play the role of blocks in the next step
         delete blocks;
@@ -270,13 +284,13 @@ void bound_density_in_block(block B){
         step++;
     }
     delete blocks;
+    return del;
+    //  printf("Total number of considered blocks: %d\n",del);
 
-    printf("Total number of considered blocks: %d\n",del);
-
-    printf("Block with the highest lower bound on the density (%.20f):\n",delta_max);
-    print_block(densest_block);
-    threads_finished+=1;
-    printf("%i threads terminated", threads_finished);
+    //printf("Block with the highest lower bound on the density (%.20f):\n",delta_max);
+    //print_block(densest_block);
+    //threads_finished+=1;
+    //printf("%i threads terminated\n", threads_finished);
 }
 
 
@@ -312,43 +326,57 @@ int main(int argc, char *argv[])
 
     printf("Initial block: ");
     print_block(B);
-
-
-    int sn = 6;
-    int thread_number = pow(2,sn);
-    // Subdivide the initial block into 2^sn
-    block* initial_blocks=new(std::nothrow) block[thread_number]; // each block will give at most two new blocks	    
-    initial_blocks[0] = B;
-    block* new_blocks=new(std::nothrow) block[thread_number]; // each block will give at most two new blocks	    
-    vector<thread> threads(thread_number);
     
-    // generate 2^sn sub blocks by halving 4 times
-    for (int i = 0; i<sn; i++){
-	printf("%i",i);
-	//new_blocks = {};
-	for(int j = 0; j<pow(2,i); j++){
-	    printf(" %i",j);
-	    auto bb = split(initial_blocks[j]);
-	    new_blocks[2*j] = bb.first;
-	    new_blocks[2*j+1] = bb.second;	    
-	}
-	for(int j = 0; j<pow(2,i+1); j++){
-	    printf(" %i",j);
-	    initial_blocks[j] = new_blocks[j];
-	}
-    }
-
-    // spawn 16 threads on 16 blocks:
-    for (int i = 0; i < thread_number; i++) {
-	print_block(initial_blocks[i]);
-        threads[i] = thread(bound_density_in_block, initial_blocks[i]);
-	printf("%i",i);
-    }
-
-    for (auto& th : threads) {
-        th.join();
-    }
+    // Parallelization: we subdivide the initial block into N^4 small blocks (each free edge is divided by N),
+    //  we create M threads, and we give the blocks to threads so that each thread is occupied at each moment
+    int N = 20;
+    int blocks_number = pow(N,4);
+#if defined(contact_ac) || defined(contact_cd) // only 3 free variables
+    blocks_number = pow(N,3)
+#endif
+    //int threads_number = 20;
+    initial_blocks=new(std::nothrow) block[blocks_number];
     
+    //TODO make a version for the case ac (only 3 edges) and support sphere
+    float e1_l = lower(B[1]),  e1_r = upper(B[1]);
+    float e2_l = lower(B[2]),  e2_r = upper(B[2]);
+    float e3_l = lower(B[3]),  e3_r = upper(B[3]);
+    float e4_l = lower(B[4]),  e4_r = upper(B[4]);
+    float e5_l = lower(B[5]),  e4_r = upper(B[5]);
+    I e0 = B[0];
+    int block_index = 0;
+    for (int i1=0; i1<N; i1++){
+#if defined(contact_ac) || defined(contact_support_r)
+	I e1 = hull(e5_l + (e5_r-e5_l)*i1/N, e5_l+(e5_r-e5_l)*(i1+1)/N);
+#else
+	I e1 = hull(e1_l + (e1_r-e1_l)*i1/N, e1_l+(e1_r-e1_l)*(i1+1)/N);
+#endif
+	for (int i2=0; i2<N; i2++){
+	    I e2 = hull(e2_l + (e2_r-e2_l)*i2/N, e2_l+(e2_r-e2_l)*(i2+1)/N);
+	    for (int i3=0; i3<N; i3++){
+		I e3 = hull(e3_l + (e3_r-e3_l)*i3/N, e3_l+(e3_r-e3_l)*(i3+1)/N);
+		for (int i4=0; i4<N; i4++){
+		    I e4 = hull(e4_l + (e4_r-e4_l)*i4/N, e4_l+(e4_r-e4_l)*(i4+1)/N);
+#if defined(contact_cd)
+		    initial_blocks[block_index] = {e0, e1, e2, e3, e4, B[5]};
+		    block_index++;
+#elif defined(contact_ac) || defined(contact_support_r)		    
+		    initial_blocks[block_index] = {e0, B[1], e2, e3, e4, e1};
+		    block_index++;
+#else
+		    for (int i5=0; i5<N; i5++){
+			I e5 = hull(e5_l + (e5_r-e5_l)*i5/N, e5_l+(e5_r-e5_l)*(i5+1)/N);
+			initial_blocks[block_index] = {e0, e1, e2, e3, e4, e5};
+			block_index++;
+		    }
+#endif
+		}			    
+	    }
+	}
+    }
 
+    printf("Initial block is split into %i blocks.", blocks_number);
+    run_tasks([](int i) { return bound_density_in_block(i); }, 20, blocks_number);
+    
     return 0;
 }
