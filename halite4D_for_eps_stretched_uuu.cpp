@@ -29,7 +29,7 @@ typedef interval<double, policies<save_state<rounded_transc_std<double>>, checki
 typedef std::array<I,6> block; // 5 pour gagner 1/6 de mémoire ? 96 bits, i.e. 8bits for each I
  // maximum nb of blocks in memory
 //const int maxactifs=20000000; //32% mem
-const int maxactifs=10000000;
+const int maxactifs=50000000;
 
 // size ratio for halite
 I r=sqrt(I(2))-I(1);
@@ -53,7 +53,7 @@ block* initial_blocks;
 
 // contact_ac or contact_cd for a second contact along ac or cd
 // for a support sphere of size r
-#define support_sphere_r
+#define eps_stretched
 
 /******************/
 
@@ -127,7 +127,7 @@ bool keep(block B)
     for(int j=0;j<6;j++) {// count contacts
         if (upper(B[j])<lower(I(2)+eps)) contacts+=1;
 	if (lower(B[j])>upper(I(2)+I(2)*r-eps)) stretched+=1;  }
-    if (contacts >= 4 && stretched >= 1) {return false;}
+    if (contacts >= 4 && stretched >= 1) {printf("epsstretched");return false;}
 #endif
 #elif defined(ruuu)
     eps=I(1)/I(499); // prouvé
@@ -268,7 +268,7 @@ int bound_density_in_block(int i){
             for(int j=0;j<3;j++){
             block B=blocks[rand()%actifs];
             print_block(B);
-            I V=vol(B[0],B[1],B[2],B[3],B[4],B[5]);
+/*            I V=vol(B[0],B[1],B[2],B[3],B[4],B[5]);
             I C=cov(B[0],B[1],B[2],B[3],B[4],B[5]);
             I d=density(B[0],B[1],B[2],B[3],B[4],B[5]);
             printf("vol=%f,%f\n",lower(V),upper(V));
@@ -287,7 +287,7 @@ int bound_density_in_block(int i){
             z=solid(cd,ac,bc,ad,bd,ab);
             printf("C=RIF(%f,%f)\n",lower(z),upper(z));
             z=solid(ad,bd,cd,ab,ac,bc);
-            printf("D=RIF(%f,%f)\n",lower(z),upper(z)); 
+            printf("D=RIF(%f,%f)\n",lower(z),upper(z)); */
             }
             break;
         }
@@ -317,39 +317,51 @@ int main(int argc, char *argv[])
     printf("\n");
 
     I gap=I(2)*hull(I(0),r);
-
+    I epsgap = hull(-I(1)/I(80), I(1)/I(80));
 
     // initial block
     block B;
+#if defined(eps_stretched)
+    printf("I am eps stretched !");
     B[0]=ra+rb; // always contact by homothety
     B[1]=ra+rc+gap;
-    B[2]=ra+rd+gap;
-    B[3]=rb+rc+gap;
-    B[4]=rb+rd+gap;
-    B[5]=rc+rd+gap;
+    B[2]=ra+rd+epsgap;
+    B[3]=rb+rc+epsgap;
+    B[4]=rb+rd+epsgap;
+    B[5]=rc+rd+I(2)*I(r)+epsgap; // for now only ad
+#else
+    B[0]=ra+rb; // always contact by homothety
+    B[1]=ra+rc+gap;
+    B[2]=ra+rd+epsgap;
+    B[3]=rb+rc+epsgap;
+    B[4]=rb+rd+epsgap;
+    B[5]=rc+rd+I(2)*I(r)+epsgap; // for now only ad
+#endif
+    
     // dimension reduction by sliding
-    #if defined(contact_ac) // a second contact along ac
+#if defined(contact_ac) // a second contact along ac
     B[1]=ra+rc;
-    #elif defined(contact_cd) // or along cd
+#elif defined(contact_cd) // or along cd
     B[5]=rc+rd;
-    #elif defined(support_sphere_r) // or only one contact but a support sphere of radius r
+#elif defined(support_sphere_r) // or only one contact but a support sphere of radius r
     // ac va devoir être recalculée en fonction des autres longueurs d'arêtes
-    #endif
+#endif
 
     printf("Initial block: ");
     print_block(B);
-    
+    int blocks_number = 0;
+    printf("Dividing initial block into %i blocks.", blocks_number);
     // Parallelization: we subdivide the initial block into N^4 small blocks (each free edge is divided by N),
     //  we create M threads, and we give the blocks to threads so that each thread is occupied at each moment
-    int N = 60;
+    int N = 20;
 #if defined(contact_ac) || defined(contact_cd) || defined(support_sphere_r) // only 3 free variables
-    const int blocks_number = pow(N,4);
+    blocks_number = pow(N,4);
 #else
-    const int blocks_number = pow(N,5);
+    blocks_number = pow(N,5);
 #endif
     //int threads_number = 20;
     initial_blocks=new(std::nothrow) block[blocks_number];
-    
+    printf("Dividing initial block into %i blocks.", blocks_number);
     //TODO make a version for the case ac (only 3 edges) and support sphere
     float e1_l = lower(B[1]),  e1_r = upper(B[1]);
     float e2_l = lower(B[2]),  e2_r = upper(B[2]);
