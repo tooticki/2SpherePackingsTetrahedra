@@ -3,8 +3,9 @@
 // sliding -> one can assume either a second pair of spheres in contact, say ac or cd (two cases to consider), or a sphere support of radius r
 // we thus have four degree of freedom
 
-// !!! use c++ 20 compuler: g++ -std=c++20 halite4D.cpp -o halite4D.o 
+// !!! for async need to use c++ 20 compiler: g++ -std=c++20 halite4D.cpp -o halite4D.o 
 
+// 4/7: 6 blocks stop after 1000000 deletions, ac is precise for none of them ;-(
 
 // Library for interval arithmetic
 #include <boost/numeric/interval.hpp>
@@ -105,7 +106,7 @@ bool keep(block B)
     B[1]=ac(B, false);
     if (empty(B[1])) return false; // not such FM-tetrahedra
     #endif
-
+    I eps;
     //symmetries
 //    #if defined(ruuu) // one can assume CD>=BC>=BD
 //    if (upper(B[5])<=lower(B[3]) || upper(B[3])<lower(B[4])) return false;
@@ -113,22 +114,31 @@ bool keep(block B)
 
     // skip block if it is within epsilon from the conjectured densest tetrahedron
     // (epsilon and the edge lengths depend on the considered case)
-    #if defined(uuuu)
-    I eps=I(1)/I(80);
+#if defined(uuuu)
+    eps=I(1)/I(80);
     int i=0;
     for(int j=0;j<6;j++) // count contacts
         if (upper(B[j])<lower(I(2)+eps)) i+=1;
     if (i==6) return false; // 6 eps-contacts -> skip
-    #elif defined(ruuu)
-    I eps=I(1)/I(499); // prouvé
+// skip le tetrahedron near 2 2 2 2 2+2r .. (4 contacts and 1 stretched: because cannot compute ac)
+#if defined(support_sphere_r)
+    eps=I(1)/I(80);
+    int contacts = 0, stretched = 0;
+    for(int j=0;j<6;j++) {// count contacts
+        if (upper(B[j])<lower(I(2)+eps)) contacts+=1;
+	if (lower(B[j])>upper(I(2)+I(2)*r-eps)) stretched+=1;  }
+    if (contacts >= 4 && stretched >= 1) {printf("epsstretched");return false;}
+#endif
+#elif defined(ruuu)
+    eps=I(1)/I(499); // prouvé
 //    I eps=I(1)/I(80); // pas prouvé (essai pour voir si ça passe)
     int i=0;
     for(int j=0;j<6;j++) // count contacts
         if (upper(B[j])<lower(I(2)+eps)) i+=1;
     // 5 contacts and one stretched edge 11 -> skip
     if (i==5 && (upper(abs(B[3]-t))<lower(eps) || upper(abs(B[4]-t))<lower(eps) || upper(abs(B[5]-t))<lower(eps))) return false;
-    #endif
-
+#endif
+    
     // reject blocks which do not correspond to any tetrahedron
     if (!tetrahedral(B[0],B[1],B[2],B[3],B[4],B[5]))
         return false;
@@ -219,11 +229,11 @@ int bound_density_in_block(int i){
 
     while (actifs>0) // split blocks step by step while there are still some
 	{
-	    if (del>1000000){
+	    /*if (del>1000000){
 		printf("1000000 del, some block: ");
 		print_block(blocks[0]);
 		break;
-	    }
+		}*/
 	    int newdel=0;
 	    //if (actifs>=0) printf(" step %2d: %9d blocks considered",step,2*actifs); fflush(stdout);
 	    // to store the active blocks created by halving during this step

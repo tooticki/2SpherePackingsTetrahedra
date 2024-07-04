@@ -8,11 +8,11 @@ I ac(block B,bool verbose)
     I bc2=square(B[3]);
     I bd2=square(B[4]);
     I cd2=square(B[5]);
-    #if defined(uuuu)
+    //#if defined(uuuu)
     I D=square(bd2-I(4))-I(16);
     I E=-I(8)*square(bd2) + I(8)*(ad2 - I(4))*bc2 - I(2)*((ad2 - I(4))*bc2 - I(4)*ad2 - I(16))*bd2 - I(8)*(ad2 - I(4))*cd2;
     I F=(square(ad2) - I(8)*ad2)*square(bc2) - I(16)*square(cd2) - I(8)*(square(ad2) - I(4)*ad2)*bc2 + I(8)*(ad2*bc2 - I(4)*ad2)*bd2 - I(8)*((bc2 - I(4))*bd2 - I(4)*ad2 - I(4)*bc2 + I(16))*cd2;
-    #endif
+    //#endif
 
     // ac^2 is a root of D*X^2+E*X+F
     if(verbose)
