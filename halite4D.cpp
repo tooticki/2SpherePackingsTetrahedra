@@ -46,7 +46,7 @@ I u=I(1);
 
 // Only consider tetrahedra close to the degenerate ones from uuuu support_sphere_r: the one with at least one stretched edge
 // in eps_suuuu - neighborhood
-#define only_degenerate
+//#define only_degenerate
 
 /************************************************************/
 
@@ -109,7 +109,7 @@ I eps_loc = I::empty();
 
 // Value of eps needed to exclude the degenerate case when ac cannot be computed 
 #if defined(uuuu) && defined (support_sphere_r)
-I eps_suuuu=I(3)/I(10); //1/17 4s, 1/18 ??? 
+I eps_suuuu=I(8)/I(100); //between 0.05 and 0.3
 #endif
 
 // Functions to verify if the block is in eps-neighborhood of the optimum
@@ -399,17 +399,14 @@ void split_and_run_block(block B, int N=10){
     }
 
     printf(" Done \n");
-    // async leaks memory: so can not divide more than by 10 each edge.... 
-    // run_tasks([](int i) { return bound_density_in_block(i); }, 20, blocks_number);
-    
-    // another solution: boost thread pool
-    boost::asio::thread_pool th_pool(20);
-    
+      
+    // Boost thread pool for thread management
+    boost::asio::thread_pool th_pool(20);   
    
     auto start = high_resolution_clock::now();
-    bool verbose = N<=2;
+
     for (size_t i = 0; i < blocks_number; i++) {
-	post(th_pool, boost::bind(bound_density_in_block,  i, false));//[j=i](){cout << "bind"; return boost::bind(bound_density_in_block,  j);});
+	post(th_pool, boost::bind(bound_density_in_block,  i, N<=2));
     }
     th_pool.join();
 
@@ -467,7 +464,7 @@ int main(int argc, char *argv[])
 #elif defined(support_sphere_r) // or only one contact but a support sphere of radius r
     // ac va devoir être recalculée en fonction des autres longueurs d'arêtes
 #endif
-    split_and_run_block(B,10);
+    split_and_run_block(B,30);
 #endif
     return 0;
 }
