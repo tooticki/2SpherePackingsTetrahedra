@@ -30,7 +30,7 @@ typedef interval<double, policies<save_state<rounded_transc_std<double>>, checki
 typedef std::array<I,6> block; // 5 pour gagner 1/6 de mémoire ? 96 bits, i.e. 8bits for each I
 
 // Maximum nb of blocks in memory
-const int maxactifs=10000000;
+const int maxactifs=1000000;// 10000000
 
 // Sphere radii for halite
 I r=sqrt(I(2))-I(1);
@@ -44,7 +44,7 @@ I u=I(1);
 
 // `contact_ac` or `contact_cd` for a second contact along ac or cd
 // `support_sphere_r` for a support sphere of size r
-#define contact_ac
+#define support_sphere_r
 
 
 // `only_degenerate`: only consider tetrahedra close to the degenerate ones from `uuuu` `support_sphere_r`
@@ -105,7 +105,7 @@ I eps_loc = I(1)/I(317);
 #elif defined (urrr) || defined(rrru)
 I eps_loc = I(1)/I(410);
 #elif defined (rrrr)
-I eps_loc = I(1)/I(243);
+I eps_loc = I(1)/I(80);//!!! temporary eps  I(1)/I(243);
 #else
 I eps_loc = I::empty();
 #endif
@@ -436,6 +436,19 @@ int main(int argc, char *argv[])
 
     I gap=I(2)*hull(I(0),r);    
     block B;
+    B = {
+	I(0.82842712474618984686003386741504073143005371093750,0.82842712474619029094924371747765690088272094726562),
+	I(0.82842712474618984686003386741504073143005371093750,1.65685424949238058189848743495531380176544189453125),
+	I(0.82842713594436645507812500000000000000000000000000,0.83878247439861297607421875000000000000000000000000),
+	I(1.09766596555709838867187500000000000000000000000000,1.11837661266326904296875000000000000000000000000000),
+	I(1.59472227096557617187500000000000000000000000000000,1.60507762432098388671875000000000000000000000000000),
+	I(0.82842713594436645507812500000000000000000000000000,0.84913781285285949707031250000000000000000000000000) 
+    };
+    print_block(B);
+    cout << "Density : " << lower(density(B[0],B[1],B[2],B[3],B[4],B[5])) << " " << upper(density(B[0],B[1],B[2],B[3],B[4],B[5]));
+    cout << "Radius : " << lower(radius(B[0],B[1],B[2],B[3],B[4],B[5])) << " " << upper(radius(B[0],B[1],B[2],B[3],B[4],B[5]));
+
+
     
 #if defined(support_sphere_r) && defined(uuuu) && defined(only_degenerate) // If we only consider degenerate tetrahedra
     cout << "Only consider degenerate tetrahedra" << endl;
@@ -472,3 +485,10 @@ int main(int argc, char *argv[])
 #endif
     return 0;
 }
+
+AB,AC,AD,BC,BD,CD = (RIF(0.82842712474618984686003386741504073143005371093750,0.82842712474619029094924371747765690088272094726562),
+RIF(0.82842712474618984686003386741504073143005371093750,1.65685424949238058189848743495531380176544189453125),
+RIF(0.82842713594436645507812500000000000000000000000000,0.83878247439861297607421875000000000000000000000000),
+RIF(1.09766596555709838867187500000000000000000000000000,1.11837661266326904296875000000000000000000000000000),
+RIF(1.59472227096557617187500000000000000000000000000000,1.60507762432098388671875000000000000000000000000000),
+		     RIF(0.82842713594436645507812500000000000000000000000000,0.84913781285285949707031250000000000000000000000000) )
