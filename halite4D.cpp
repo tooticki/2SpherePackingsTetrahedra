@@ -3,6 +3,9 @@
 // sliding -> one can assume either a second pair of spheres in contact, say ac or cd (two cases to consider), or a sphere support of radius r
 // we thus have four degree of freedom
 
+// To compile, might need to add -pthread flag:
+// > g++ -pthread halite4D.cpp -o halite4D.o
+
 #include <iostream>
 using namespace std;
 
@@ -34,24 +37,23 @@ I r=sqrt(I(2))-I(1);
 I u=I(1);
 
 /****************************** Case selection ******************************/
-
 // Radii used in compilation to optimize the formula for the radius of sphere support
-#define uuuu
-// TODO : lister les cas
+#define rrrr
+// only `uuuu` works for now
+// TODO `rrrr` in progress
 
 // `contact_ac` or `contact_cd` for a second contact along ac or cd
 // `support_sphere_r` for a support sphere of size r
-#define support_sphere_r
+#define contact_ac
 
 
-// Only consider tetrahedra close to the degenerate ones from uuuu support_sphere_r: the one with at least one stretched edge
-// in eps_suuuu - neighborhood
+// `only_degenerate`: only consider tetrahedra close to the degenerate ones from `uuuu` `support_sphere_r`
+// in eps_suuuu - neighborhood of tetrahedra having 4 tight and 1 tretched edge
 //#define only_degenerate
 
 /************************************************************/
 
-// Radii values of the tetrahedra and
-// lower bounds on the conjectured maximal density
+// Radii values of the tetrahedra
 #if defined (uuuu)
 I ra=u, rb=u, rc=u, rd=u;
 #elif defined (uuur)
@@ -74,7 +76,7 @@ I ra= r, rb=u, rc=u, rd=u;
 I ra = I::empty(), rb=I::empty(), rc=I::empty(), rd=I::empty();
 #endif
 
-// Lower bounds on the conjectured density and the conjectured optimal blocks
+// Lower bounds on the conjectured density and the conjectured optimal tetrahedra
 #if defined (uuuu)
 const I delta_bound=I(779635570044252)/I(1000000000000000); // 1111 tight
 #elif defined (uurr) || defined(urur) || defined(rruu)
@@ -87,7 +89,8 @@ const I delta_bound=I(812542027810834)/I(1000000000000000); // r111 with one edg
 #elif defined (rrrr)
 const I stretched_edges_length=r*sqrt(I(2)*sqrt(I(6))+I(6)); //  stretched edges rr in rrrr
 const I delta_bound=I(784688454045207)/I(1000000000000000); // rrrr with two incident edges rr stretched
-#else const I delta_bound = I::empty();
+#else
+const I delta_bound = I::empty();
 #endif
 
 block B_tight = {ra+rb, ra+rc, ra+rd, rb+rc, rb+rd, rc+rd};
@@ -109,7 +112,7 @@ I eps_loc = I::empty();
 
 // Value of eps needed to exclude the degenerate case when ac cannot be computed 
 #if defined(uuuu) && defined (support_sphere_r)
-I eps_suuuu=I(8)/I(100); //between 0.05 and 0.3
+I eps_suuuu=I(3)/I(100); //between 0.05 and 0.4
 #endif
 
 // Functions to verify if the block is in eps-neighborhood of the optimum
@@ -123,7 +126,7 @@ bool is_eps_optimal(block B){
 #elif  defined (uuur) || defined(ruuu)
 bool is_eps_optimal(block B){
     int contacts=0, stretched=0;
-    for(int i=0;i<6;j++) {// count contacts and stretched edges
+    for(int i=0;i<6;i++) {// count contacts and stretched edges
         if (upper(B[i]) < lower(B_tight[i] + eps_loc)) contacts++;
 #if defined(uuur)
 	if ((i==1||i==3) && lower(B[i]) > upper(stretched_edge_length - eps_loc))   stretched++;
@@ -136,9 +139,9 @@ bool is_eps_optimal(block B){
 #elif defined (rrrr)
 bool is_eps_optimal(block B){
     int contacts=0, stretched=0;
-    for(int i=0;i<6;j++) {// count contacts and stretched edges
+    for(int i=0;i<6;i++) {// count contacts and stretched edges
         if (upper(B[i]) < lower(B_tight[i] + eps_loc)) contacts++;
-	if (lower(B[i]) > upper(stretched_edges_length - eps_loc)) stretched++;
+	if (lower(B[i]) > upper(stretched_edges_length - eps_loc) && upper(B[i]) < lower(stretched_edges_length + eps_loc)) stretched++;
     }    
     return contacts==4 && stretched==2;
 }
@@ -172,7 +175,6 @@ void print_block(block B){
 
 // decide whether to keep block B for further refinement)
 bool keep(block B){
-    //print_block(B);
 #if defined(support_sphere_r) && !defined(only_degenerate)
     B[1]=ac(B, false); // compute edge ac
     if (empty(B[1]))  return false;  // no such FM-tetrahedra
@@ -202,7 +204,7 @@ bool keep(block B){
 #if defined(support_sphere_r)
     I rhoB=r;
 #else
-    I rhoB=radius(B[0],B[1],B[2],B[3],B[4],B[5]);
+    I rhoB=radius(B[0],B[1],B[2],B[3],B[4],B[5]);    
     if (lower(rhoB)>upper(r))  return false;  // support sphere is too large -> reject block
 #endif
     
@@ -272,6 +274,7 @@ std::pair<block,block> split(block B)
 
 int bound_density_in_block(int i, bool verbose=false){
     block B = initial_blocks[i];
+    // print_block(B);
     // blocks stores all the active subblocks (only one at the beginning)
     block* blocks=new block[1];
     blocks[0]=B;
@@ -344,9 +347,9 @@ int bound_density_in_block(int i, bool verbose=false){
     //  printf("Total number of considered blocks: %d\n",del);
 }
 
-void split_and_run_block(block B, int N=10){
+void split_and_run_block(block B, int N=10, int M=20){
     printf("Initial block: ");
-    print_block(B);
+    //print_block(B);
     
     // Parallelization: we subdivide the initial block into N^4 small blocks (each free edge is divided by N),
     //  we create M threads, and we give the blocks to threads so that each thread is occupied at each moment
@@ -401,7 +404,7 @@ void split_and_run_block(block B, int N=10){
     printf(" Done \n");
       
     // Boost thread pool for thread management
-    boost::asio::thread_pool th_pool(20);   
+    boost::asio::thread_pool th_pool(M);   
    
     auto start = high_resolution_clock::now();
 
@@ -434,8 +437,8 @@ int main(int argc, char *argv[])
     I gap=I(2)*hull(I(0),r);    
     block B;
     
-#if defined(support_sphere_r) && defined(uuuu) && defined(only_degenerate) // If we only consider degenerate tetrahedra: also subdivide ac
-    cout << "Only degenerate" << endl;
+#if defined(support_sphere_r) && defined(uuuu) && defined(only_degenerate) // If we only consider degenerate tetrahedra
+    cout << "Only consider degenerate tetrahedra" << endl;
     I eps_gap = hull(I(0), eps_suuuu);
     B[0]=ra+rb; // always contact by homothety
     B[1]=ra+rc+gap;
@@ -446,7 +449,8 @@ int main(int argc, char *argv[])
     for(int i = 2; i<=5; i++){ // each of the last 4 edges can be stretched and there is no symmetry
 	I e = B[i];
 	B[i] += I(2)*r - eps_gap;
-	split_and_run_block(B,20);
+	B[i] = intersect(B[i], I(lower(e),10));
+	split_and_run_block(B,10,7);// 10 7 for uuuu thinkpad
 	B[i] = e;
     }
 #else
@@ -459,12 +463,12 @@ int main(int argc, char *argv[])
     // dimension reduction by sliding
 #if defined(contact_ac) // a second contact along ac
     B[1]=ra+rc;
-#elif defined(contact_cd) // or along cd
+#elif defined(contact_cd) // a second contact along cd
     B[5]=rc+rd;
-#elif defined(support_sphere_r) // or only one contact but a support sphere of radius r
+#elif defined(support_sphere_r) // only one contact but a support sphere of radius r
     // ac va devoir être recalculée en fonction des autres longueurs d'arêtes
 #endif
-    split_and_run_block(B,30);
+    split_and_run_block(B,20,7); // 10 7 for uuuu thinkpad
 #endif
     return 0;
 }

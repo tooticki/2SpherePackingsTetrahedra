@@ -80,4 +80,10 @@ F=SR(P).subs(ac=0).expand()
 # what if two valid solutions? may happen?
 
 # full_simplify E and F, replace ab^2 by ab2
-
+var('u x y z w')
+dico_ro = {ad^2:w, ac^2:u, cd^2:z, bd^2:y, bc^2:x, ad^4:w^2, ac^4:u^2, cd^4:z^2, bd^4:y^2, bc^4:x^2}
+dico_1111_ab_cd = {ra:1,rb:1,rc:1,rd:1, ab:2, cd:2}
+rv = sqrt(2)-1
+dico_rrrr_ab_cd = {ra:r,rb:r,rc:r,rd:r, ab:2*r, cd:2*r}
+dico_rrrr_ab_ac = {ra:r,rb:r,rc:r,rd:r, ab:2*r, ac:2*r}
+dico_rrrr_ab = {ra:r,rb:r,rc:r,rd:r, ab:2*r}

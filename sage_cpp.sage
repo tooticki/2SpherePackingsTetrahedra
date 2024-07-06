@@ -43,7 +43,7 @@ def sage2C(exp):
         return str(sage2C(m[x]))+'+'+str(sage2C(m[y]))
     m=exp.match(x^2)
     if str(m)!='None':
-        return 'pow('+str(sage2C(m[x]))+',2)'
+        return 'square('+str(sage2C(m[x]))+')'
     m=exp.match(x^3)
     if str(m)!='None':
         return 'pow('+str(sage2C(m[x]))+',3)'
@@ -56,6 +56,12 @@ def sage2C(exp):
     m=exp.match(x^6)
     if str(m)!='None':
         return 'pow('+str(sage2C(m[x]))+',6)'
+    m=exp.match(x^7)
+    if str(m)!='None':
+        return 'pow('+str(sage2C(m[x]))+',7)'
+    m=exp.match(x^8)
+    if str(m)!='None':
+        return 'pow('+str(sage2C(m[x]))+',8)'
     m=exp.match(x^(3/2))
     if str(m)!='None':
         return 'pow(sqrt('+str(sage2C(m[x]))+'),3)'
